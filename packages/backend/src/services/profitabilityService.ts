@@ -1,10 +1,6 @@
 import { MachineStatus, PriceDataPoint } from '../types/maraApiTypes';
-
-export interface ArbitrageDecision {
-  choice: 'mining' | 'computing' | 'mixed';
-  reasoning: string;
-  confidence: number;
-}
+import { siteStateService } from './siteStateService';
+import { DecisionEngine, ArbitrageDecision } from '../ai/decisionEngine';
 
 export interface MachineEfficiency {
   roi: number;
@@ -85,8 +81,8 @@ export class ProfitabilityService {
     const computingCost = (computingPower / 1000) * prices.energy_price;
     const computingProfit = computingRevenue - computingCost;
 
-    // Determine arbitrage choice
-    const arbitrageDecision = this.determineArbitrageChoice(miningProfit, computingProfit, miningPower, computingPower);
+    // Use DecisionEngine for arbitrage choice
+    const arbitrageDecision = DecisionEngine.determineArbitrageChoice(miningProfit, computingProfit, miningPower, computingPower);
 
     // Calculate machine efficiency for each type
     const machineEfficiency = {
@@ -157,45 +153,6 @@ export class ProfitabilityService {
   }
 
   /**
-   * Determine the optimal arbitrage choice between mining and computing
-   */
-  static determineArbitrageChoice(
-    miningProfit: number,
-    computingProfit: number,
-    miningPower: number,
-    computingPower: number
-  ): ArbitrageDecision {
-    const miningProfitPerKw = miningPower > 0 ? miningProfit / (miningPower / 1000) : 0;
-    const computingProfitPerKw = computingPower > 0 ? computingProfit / (computingPower / 1000) : 0;
-
-    // Calculate profit difference as percentage
-    const totalProfit = miningProfit + computingProfit;
-    const profitDifference = Math.abs(miningProfitPerKw - computingProfitPerKw);
-    const profitDifferencePercent = totalProfit > 0 ? (profitDifference / (totalProfit / 2)) * 100 : 0;
-
-    // Determine choice based on profit per kW with 10% threshold
-    if (miningProfitPerKw > computingProfitPerKw * 1.1) {
-      return {
-        choice: 'mining',
-        reasoning: `Mining is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${miningProfitPerKw.toFixed(2)}/kW vs $${computingProfitPerKw.toFixed(2)}/kW)`,
-        confidence: Math.min(95, 50 + profitDifferencePercent)
-      };
-    } else if (computingProfitPerKw > miningProfitPerKw * 1.1) {
-      return {
-        choice: 'computing',
-        reasoning: `Computing is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${computingProfitPerKw.toFixed(2)}/kW vs $${miningProfitPerKw.toFixed(2)}/kW)`,
-        confidence: Math.min(95, 50 + profitDifferencePercent)
-      };
-    } else {
-      return {
-        choice: 'mixed',
-        reasoning: `Profits are similar (${profitDifferencePercent.toFixed(1)}% difference) - maintaining mixed allocation for diversification`,
-        confidence: Math.max(60, 100 - profitDifferencePercent)
-      };
-    }
-  }
-
-  /**
    * Calculate ROI for a machine type
    */
   static calculateROI(powerUsed: number, revenue: number, energyPrice: number): number {
@@ -204,7 +161,7 @@ export class ProfitabilityService {
   }
 
   /**
-   * Calculate profit metrics for mining operations
+   * Calculate mining-specific metrics
    */
   static calculateMiningMetrics(
     airMinersRevenue: number,
@@ -215,23 +172,25 @@ export class ProfitabilityService {
     immersionMinersPower: number,
     energyPrice: number
   ) {
-    const totalRevenue = airMinersRevenue + hydroMinersRevenue + immersionMinersRevenue;
-    const totalPower = airMinersPower + hydroMinersPower + immersionMinersPower;
-    const totalCost = (totalPower / 1000) * energyPrice;
-    const totalProfit = totalRevenue - totalCost;
+    const revenue = airMinersRevenue + hydroMinersRevenue + immersionMinersRevenue;
+    const power = airMinersPower + hydroMinersPower + immersionMinersPower;
+    const cost = (power / 1000) * energyPrice;
+    const profit = revenue - cost;
+    const profitPerKw = power > 0 ? profit / (power / 1000) : 0;
+    const efficiency = power > 0 ? revenue / (power / 1000) : 0;
 
     return {
-      revenue: totalRevenue,
-      power: totalPower,
-      cost: totalCost,
-      profit: totalProfit,
-      profitPerKw: totalPower > 0 ? totalProfit / (totalPower / 1000) : 0,
-      efficiency: totalPower > 0 ? totalRevenue / (totalPower / 1000) : 0
+      revenue,
+      power,
+      cost,
+      profit,
+      profitPerKw,
+      efficiency
     };
   }
 
   /**
-   * Calculate profit metrics for computing operations
+   * Calculate computing-specific metrics
    */
   static calculateComputingMetrics(
     gpuComputeRevenue: number,
@@ -240,83 +199,165 @@ export class ProfitabilityService {
     asicComputePower: number,
     energyPrice: number
   ) {
-    const totalRevenue = gpuComputeRevenue + asicComputeRevenue;
-    const totalPower = gpuComputePower + asicComputePower;
-    const totalCost = (totalPower / 1000) * energyPrice;
-    const totalProfit = totalRevenue - totalCost;
+    const revenue = gpuComputeRevenue + asicComputeRevenue;
+    const power = gpuComputePower + asicComputePower;
+    const cost = (power / 1000) * energyPrice;
+    const profit = revenue - cost;
+    const profitPerKw = power > 0 ? profit / (power / 1000) : 0;
+    const efficiency = power > 0 ? revenue / (power / 1000) : 0;
 
     return {
-      revenue: totalRevenue,
-      power: totalPower,
-      cost: totalCost,
-      profit: totalProfit,
-      profitPerKw: totalPower > 0 ? totalProfit / (totalPower / 1000) : 0,
-      efficiency: totalPower > 0 ? totalRevenue / (totalPower / 1000) : 0
+      revenue,
+      power,
+      cost,
+      profit,
+      profitPerKw,
+      efficiency
     };
   }
 
   /**
-   * Rank machine types by profitability (ROI)
+   * Get real-time profitability analysis using cached data
    */
-  static rankMachinesByProfitability(analysis: ProfitabilityAnalysis): Array<{
-    type: string;
-    roi: number;
-    revenue: number;
-    power: number;
-    units: number;
+  static async getRealTimeAnalysis(forceRefresh = false): Promise<ProfitabilityAnalysis> {
+    console.log('⚡ Getting real-time profitability analysis...');
+
+    try {
+      // Get data from cache
+      const { prices, machineStatus } = await siteStateService.getAllData(forceRefresh);
+      const siteConfig = siteStateService.getSiteConfig();
+
+      // Calculate analysis using cached data
+      const analysis = this.calculateAnalysis(machineStatus, prices, siteConfig);
+
+      console.log('✅ Real-time analysis completed');
+      return analysis;
+    } catch (error) {
+      console.error('❌ Failed to get real-time analysis:', error instanceof Error ? error.message : error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get comprehensive site analysis including inventory and performance metrics
+   */
+  static async getComprehensiveSiteAnalysis(forceRefresh = false): Promise<{
+    profitability: ProfitabilityAnalysis;
+    inventory: {
+      availableMachines: any;
+      utilizationRate: number;
+      powerCapacityRemaining: number;
+    };
+    recommendations: string[];
   }> {
-    const machines = [];
+    console.log('🔍 Getting comprehensive site analysis...');
 
-    if (analysis.machineEfficiency.airMiners) {
-      machines.push({
-        type: 'Air Miners',
-        roi: analysis.machineEfficiency.airMiners.roi,
-        revenue: analysis.machineEfficiency.airMiners.revenue,
-        power: analysis.machineEfficiency.airMiners.powerUsed,
-        units: analysis.machineEfficiency.airMiners.unitsAllocated
-      });
+    try {
+      // Get all data including inventory
+      const { inventory, prices, machineStatus } = await siteStateService.getAllData(forceRefresh);
+      const siteConfig = siteStateService.getSiteConfig();
+
+      if (!siteConfig) {
+        throw new Error('Site configuration not available');
+      }
+
+      // Calculate profitability analysis
+      const profitabilityAnalysis = this.calculateAnalysis(machineStatus, prices, siteConfig);
+
+      // Calculate inventory and utilization metrics
+      const powerCapacityRemaining = siteConfig.power - machineStatus.total_power_used;
+      const utilizationRate = (machineStatus.total_power_used / siteConfig.power) * 100;
+
+      // Use DecisionEngine to generate recommendations
+      const recommendations = DecisionEngine.generateRecommendations(
+        profitabilityAnalysis,
+        inventory,
+        powerCapacityRemaining
+      );
+
+      const result = {
+        profitability: profitabilityAnalysis,
+        inventory: {
+          availableMachines: inventory,
+          utilizationRate,
+          powerCapacityRemaining
+        },
+        recommendations
+      };
+
+      console.log('✅ Comprehensive site analysis completed');
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to get comprehensive analysis:', error instanceof Error ? error.message : error);
+      throw error;
     }
+  }
 
-    if (analysis.machineEfficiency.hydroMiners) {
-      machines.push({
-        type: 'Hydro Miners',
-        roi: analysis.machineEfficiency.hydroMiners.roi,
-        revenue: analysis.machineEfficiency.hydroMiners.revenue,
-        power: analysis.machineEfficiency.hydroMiners.powerUsed,
-        units: analysis.machineEfficiency.hydroMiners.unitsAllocated
-      });
+  /**
+   * Monitor profitability changes over time using cached data
+   */
+  static async getProfitabilityTrend(samples = 5, intervalMinutes = 2): Promise<{
+    currentAnalysis: ProfitabilityAnalysis;
+    trend: 'improving' | 'declining' | 'stable';
+    changePercent: number;
+    historicalData: Array<{
+      timestamp: string;
+      netProfit: number;
+      profitMargin: number;
+      powerUtilization: number;
+    }>;
+  }> {
+    console.log(`📈 Monitoring profitability trend (${samples} samples, ${intervalMinutes}min intervals)...`);
+
+    const historicalData: Array<{
+      timestamp: string;
+      netProfit: number;
+      profitMargin: number;
+      powerUtilization: number;
+    }> = [];
+
+    try {
+      // Get current analysis
+      const currentAnalysis = await this.getRealTimeAnalysis();
+
+      // Collect historical samples
+      for (let i = 0; i < samples; i++) {
+        const analysis = await this.getRealTimeAnalysis(i === 0); // Force refresh on first sample
+
+        historicalData.push({
+          timestamp: new Date().toISOString(),
+          netProfit: analysis.netProfit,
+          profitMargin: analysis.profitMargin,
+          powerUtilization: analysis.powerUtilization
+        });
+
+        // Wait between samples (skip wait on last sample)
+        if (i < samples - 1) {
+          await new Promise(resolve => setTimeout(resolve, intervalMinutes * 60 * 1000));
+        }
+      }
+
+      // Calculate trend
+      const firstProfit = historicalData[0].netProfit;
+      const lastProfit = historicalData[historicalData.length - 1].netProfit;
+      const changePercent = firstProfit !== 0 ? ((lastProfit - firstProfit) / Math.abs(firstProfit)) * 100 : 0;
+
+      let trend: 'improving' | 'declining' | 'stable' = 'stable';
+      if (Math.abs(changePercent) > 5) { // 5% threshold for significant change
+        trend = changePercent > 0 ? 'improving' : 'declining';
+      }
+
+      console.log(`✅ Profitability trend analysis completed: ${trend} (${changePercent.toFixed(2)}% change)`);
+
+      return {
+        currentAnalysis,
+        trend,
+        changePercent,
+        historicalData
+      };
+    } catch (error) {
+      console.error('❌ Failed to get profitability trend:', error instanceof Error ? error.message : error);
+      throw error;
     }
-
-    if (analysis.machineEfficiency.immersionMiners) {
-      machines.push({
-        type: 'Immersion Miners',
-        roi: analysis.machineEfficiency.immersionMiners.roi,
-        revenue: analysis.machineEfficiency.immersionMiners.revenue,
-        power: analysis.machineEfficiency.immersionMiners.powerUsed,
-        units: analysis.machineEfficiency.immersionMiners.unitsAllocated
-      });
-    }
-
-    if (analysis.machineEfficiency.gpuCompute) {
-      machines.push({
-        type: 'GPU Compute',
-        roi: analysis.machineEfficiency.gpuCompute.roi,
-        revenue: analysis.machineEfficiency.gpuCompute.revenue,
-        power: analysis.machineEfficiency.gpuCompute.powerUsed,
-        units: analysis.machineEfficiency.gpuCompute.unitsAllocated
-      });
-    }
-
-    if (analysis.machineEfficiency.asicCompute) {
-      machines.push({
-        type: 'ASIC Compute',
-        roi: analysis.machineEfficiency.asicCompute.roi,
-        revenue: analysis.machineEfficiency.asicCompute.revenue,
-        power: analysis.machineEfficiency.asicCompute.powerUsed,
-        units: analysis.machineEfficiency.asicCompute.unitsAllocated
-      });
-    }
-
-    return machines.sort((a, b) => b.roi - a.roi);
   }
 }
