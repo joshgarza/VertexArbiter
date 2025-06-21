@@ -45,6 +45,27 @@ interface MachineStatus {
       name: string;
       power: number;
     };
+    arbitrage: {
+      currentChoice: 'mining' | 'computing' | 'mixed';
+      reasoning: string;
+      confidence: number;
+      mining: {
+        revenue: number;
+        power: number;
+        cost: number;
+        profit: number;
+        profitPerKw: number;
+        efficiency: number;
+      };
+      computing: {
+        revenue: number;
+        power: number;
+        cost: number;
+        profit: number;
+        profitPerKw: number;
+        efficiency: number;
+      };
+    };
   };
   updated_at: string;
 }
@@ -68,6 +89,7 @@ const SocketTest = () => {
       console.log('Connected to server');
       // Subscribe to updates
       newSocket.emit('subscribe_updates', { type: 'machine_status' });
+      requestMachineStatus()
     });
 
     newSocket.on('disconnect', () => {
@@ -90,7 +112,20 @@ const SocketTest = () => {
       console.log('Machine status update:', data);
       setMachineStatus(data.data);
       setLastUpdate(data.timestamp);
-      setMessages(prev => [...prev, `Machine Status Updated: ${new Date(data.timestamp).toLocaleTimeString()}`]);
+
+      if (data.initialLoad) {
+        setMessages(prev => [...prev, `🚀 Initial machine status loaded automatically`]);
+      } else if (data.requestedBy) {
+        setMessages(prev => [...prev, `✅ Fresh machine status received (requested by ${data.requestedBy})`]);
+      } else {
+        setMessages(prev => [...prev, `📡 Machine Status Updated: ${new Date(data.timestamp).toLocaleTimeString()}`]);
+      }
+    });
+
+    // Handle machine status errors
+    newSocket.on('machine_status_error', (data) => {
+      console.error('Machine status error:', data);
+      setMessages(prev => [...prev, `❌ Machine Status Error: ${data.message}`]);
     });
 
     // Handle startup errors
@@ -145,6 +180,30 @@ const SocketTest = () => {
     return new Intl.NumberFormat('en-US').format(num);
   };
 
+  const getArbitrageIcon = (choice: string) => {
+    switch (choice) {
+      case 'mining': return '⛏️';
+      case 'computing': return '💻';
+      case 'mixed': return '🔄';
+      default: return '❓';
+    }
+  };
+
+  const getArbitrageColor = (choice: string) => {
+    switch (choice) {
+      case 'mining': return 'bg-blue-500';
+      case 'computing': return 'bg-purple-500';
+      case 'mixed': return 'bg-orange-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 80) return 'text-green-600';
+    if (confidence >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Connection Status */}
@@ -166,6 +225,111 @@ const SocketTest = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Arbitrage Decision - Prominent Feature */}
+      {machineStatus && (
+        <Card className="border-2 border-primary shadow-lg">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-2xl font-bold flex items-center gap-3">
+              {getArbitrageIcon(machineStatus.analysis.arbitrage.currentChoice)}
+              Arbitrage Decision
+              <Badge
+                className={`${getArbitrageColor(machineStatus.analysis.arbitrage.currentChoice)} text-white text-lg px-4 py-1`}
+              >
+                {machineStatus.analysis.arbitrage.currentChoice.toUpperCase()}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Current Choice Details */}
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-muted-foreground">CURRENT STRATEGY</div>
+                <div className="text-lg font-bold">
+                  {machineStatus.analysis.arbitrage.currentChoice === 'mining' && '⛏️ Mining Focus'}
+                  {machineStatus.analysis.arbitrage.currentChoice === 'computing' && '💻 Computing Focus'}
+                  {machineStatus.analysis.arbitrage.currentChoice === 'mixed' && '🔄 Mixed Strategy'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {machineStatus.analysis.arbitrage.reasoning}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Confidence:</span>
+                  <span className={`font-bold ${getConfidenceColor(machineStatus.analysis.arbitrage.confidence)}`}>
+                    {machineStatus.analysis.arbitrage.confidence.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Mining Performance */}
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                  ⛏️ MINING PERFORMANCE
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Revenue:</span>
+                    <span className="font-semibold text-green-600">
+                      {formatCurrency(machineStatus.analysis.arbitrage.mining.revenue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Power:</span>
+                    <span className="font-semibold">
+                      {formatNumber(machineStatus.analysis.arbitrage.mining.power)}W
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Profit:</span>
+                    <span className={`font-semibold ${machineStatus.analysis.arbitrage.mining.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(machineStatus.analysis.arbitrage.mining.profit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Profit/kW:</span>
+                    <span className={`font-semibold ${machineStatus.analysis.arbitrage.mining.profitPerKw >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(machineStatus.analysis.arbitrage.mining.profitPerKw)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Computing Performance */}
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                  💻 COMPUTING PERFORMANCE
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Revenue:</span>
+                    <span className="font-semibold text-green-600">
+                      {formatCurrency(machineStatus.analysis.arbitrage.computing.revenue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Power:</span>
+                    <span className="font-semibold">
+                      {formatNumber(machineStatus.analysis.arbitrage.computing.power)}W
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Profit:</span>
+                    <span className={`font-semibold ${machineStatus.analysis.arbitrage.computing.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(machineStatus.analysis.arbitrage.computing.profit)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Profit/kW:</span>
+                    <span className={`font-semibold ${machineStatus.analysis.arbitrage.computing.profitPerKw >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(machineStatus.analysis.arbitrage.computing.profitPerKw)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Machine Status Dashboard */}
       {machineStatus && (

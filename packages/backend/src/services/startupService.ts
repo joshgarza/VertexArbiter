@@ -81,6 +81,20 @@ export class StartupService {
     const profitMargin = status.total_revenue > 0 ? (netProfit / status.total_revenue) * 100 : 0;
     const powerUtilization = siteConfig ? (status.total_power_used / siteConfig.power) * 100 : 0;
 
+    // Calculate mining vs computing metrics for arbitrage decision
+    const miningRevenue = status.revenue.air_miners + status.revenue.hydro_miners + status.revenue.immersion_miners;
+    const miningPower = status.power.air_miners + status.power.hydro_miners + status.power.immersion_miners;
+    const miningCost = (miningPower / 1000) * prices.energy_price;
+    const miningProfit = miningRevenue - miningCost;
+
+    const computingRevenue = status.revenue.gpu_compute + status.revenue.asic_compute;
+    const computingPower = status.power.gpu_compute + status.power.asic_compute;
+    const computingCost = (computingPower / 1000) * prices.energy_price;
+    const computingProfit = computingRevenue - computingCost;
+
+    // Determine arbitrage choice (for now, default to mining but show comparison)
+    const arbitrageChoice = this.determineArbitrageChoice(miningProfit, computingProfit, miningPower, computingPower);
+
     const analysis = {
       netProfit,
       profitMargin,
@@ -90,6 +104,28 @@ export class StartupService {
       profitPerKw: status.total_power_used > 0 ? netProfit / (status.total_power_used / 1000) : 0,
       currentPrices: prices,
       siteInfo: siteConfig,
+      // Arbitrage decision data
+      arbitrage: {
+        currentChoice: arbitrageChoice.choice,
+        reasoning: arbitrageChoice.reasoning,
+        confidence: arbitrageChoice.confidence,
+        mining: {
+          revenue: miningRevenue,
+          power: miningPower,
+          cost: miningCost,
+          profit: miningProfit,
+          profitPerKw: miningPower > 0 ? miningProfit / (miningPower / 1000) : 0,
+          efficiency: miningPower > 0 ? miningRevenue / (miningPower / 1000) : 0
+        },
+        computing: {
+          revenue: computingRevenue,
+          power: computingPower,
+          cost: computingCost,
+          profit: computingProfit,
+          profitPerKw: computingPower > 0 ? computingProfit / (computingPower / 1000) : 0,
+          efficiency: computingPower > 0 ? computingRevenue / (computingPower / 1000) : 0
+        }
+      },
       machineEfficiency: {
         airMiners: status.air_miners > 0 ? {
           roi: this.calculateROI(status.power.air_miners, status.revenue.air_miners, prices.energy_price),
@@ -128,6 +164,45 @@ export class StartupService {
   }
 
   /**
+   * Determine the optimal arbitrage choice between mining and computing
+   */
+  private determineArbitrageChoice(miningProfit: number, computingProfit: number, miningPower: number, computingPower: number): {
+    choice: 'mining' | 'computing' | 'mixed';
+    reasoning: string;
+    confidence: number;
+  } {
+    // For now, default to mining but provide analysis
+    const miningProfitPerKw = miningPower > 0 ? miningProfit / (miningPower / 1000) : 0;
+    const computingProfitPerKw = computingPower > 0 ? computingProfit / (computingPower / 1000) : 0;
+
+    // Calculate profit difference as percentage
+    const totalProfit = miningProfit + computingProfit;
+    const profitDifference = Math.abs(miningProfitPerKw - computingProfitPerKw);
+    const profitDifferencePercent = totalProfit > 0 ? (profitDifference / (totalProfit / 2)) * 100 : 0;
+
+    // Determine choice based on profit per kW
+    if (miningProfitPerKw > computingProfitPerKw * 1.1) {
+      return {
+        choice: 'mining',
+        reasoning: `Mining is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${miningProfitPerKw.toFixed(2)}/kW vs $${computingProfitPerKw.toFixed(2)}/kW)`,
+        confidence: Math.min(95, 50 + profitDifferencePercent)
+      };
+    } else if (computingProfitPerKw > miningProfitPerKw * 1.1) {
+      return {
+        choice: 'computing',
+        reasoning: `Computing is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${computingProfitPerKw.toFixed(2)}/kW vs $${miningProfitPerKw.toFixed(2)}/kW)`,
+        confidence: Math.min(95, 50 + profitDifferencePercent)
+      };
+    } else {
+      return {
+        choice: 'mixed',
+        reasoning: `Profits are similar (${profitDifferencePercent.toFixed(1)}% difference) - maintaining mixed allocation for diversification`,
+        confidence: Math.max(60, 100 - profitDifferencePercent)
+      };
+    }
+  }
+
+  /**
    * Calculate ROI for a machine type
    */
   private calculateROI(powerUsed: number, revenue: number, energyPrice: number): number {
@@ -150,6 +225,9 @@ export class StartupService {
     console.log(`   Net Profit: $${machineStatus.analysis.netProfit.toFixed(2)}`);
     console.log(`   Profit Margin: ${machineStatus.analysis.profitMargin.toFixed(1)}%`);
     console.log(`   Power Utilization: ${machineStatus.analysis.powerUtilization.toFixed(1)}%`);
+    console.log(`   🎯 Arbitrage Choice: ${machineStatus.analysis.arbitrage.currentChoice.toUpperCase()}`);
+    console.log(`   💡 Reasoning: ${machineStatus.analysis.arbitrage.reasoning}`);
+    console.log(`   🎲 Confidence: ${machineStatus.analysis.arbitrage.confidence.toFixed(1)}%`);
 
     // Emit to all connected clients
     this.io.emit('machine_status', payload);
