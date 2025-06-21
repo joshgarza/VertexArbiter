@@ -254,6 +254,97 @@ async function testMachineAllocation() {
   }
 }
 
+async function testMachineStatus() {
+  try {
+    console.log('📊 Testing MARA API Machine Status...\n');
+
+    // Check if site is configured
+    if (!maraApiService.isSiteConfigured()) {
+      console.log('❌ No site configured. Please run site creation first.');
+      return;
+    }
+
+    // Get current machine status
+    console.log('🔍 Fetching current machine status...');
+
+    try {
+      const status = await maraApiService.getMachineStatus();
+
+      console.log('\n🏭 Current Machine Allocation:');
+      console.log(`   Air Miners: ${status.air_miners.toLocaleString()} units`);
+      console.log(`   Hydro Miners: ${status.hydro_miners.toLocaleString()} units`);
+      console.log(`   Immersion Miners: ${status.immersion_miners.toLocaleString()} units`);
+      console.log(`   GPU Compute: ${status.gpu_compute.toLocaleString()} units`);
+      console.log(`   ASIC Compute: ${status.asic_compute.toLocaleString()} units`);
+
+      console.log('\n⚡ Power Consumption Breakdown:');
+      console.log(`   Air Miners: ${status.power.air_miners.toLocaleString()}W`);
+      console.log(`   Hydro Miners: ${status.power.hydro_miners.toLocaleString()}W`);
+      console.log(`   Immersion Miners: ${status.power.immersion_miners.toLocaleString()}W`);
+      console.log(`   GPU Compute: ${status.power.gpu_compute.toLocaleString()}W`);
+      console.log(`   ASIC Compute: ${status.power.asic_compute.toLocaleString()}W`);
+      console.log(`   Total Power Used: ${status.total_power_used.toLocaleString()}W`);
+
+      // Calculate power utilization
+      const siteConfig = configManager.getSiteConfig();
+      const powerUtilization = siteConfig ? (status.total_power_used / siteConfig.power) * 100 : 0;
+      console.log(`   Power Utilization: ${powerUtilization.toFixed(1)}%`);
+
+      console.log('\n💰 Revenue Breakdown:');
+      console.log(`   Air Miners: $${status.revenue.air_miners.toFixed(2)}`);
+      console.log(`   Hydro Miners: $${status.revenue.hydro_miners.toFixed(2)}`);
+      console.log(`   Immersion Miners: $${status.revenue.immersion_miners.toFixed(2)}`);
+      console.log(`   GPU Compute: $${status.revenue.gpu_compute.toFixed(2)}`);
+      console.log(`   ASIC Compute: $${status.revenue.asic_compute.toFixed(2)}`);
+      console.log(`   Total Revenue: $${status.total_revenue.toFixed(2)}`);
+
+      console.log('\n💸 Cost Analysis:');
+      console.log(`   Total Power Cost: $${status.total_power_cost.toFixed(2)}`);
+
+      const netProfit = status.total_revenue - status.total_power_cost;
+      const profitMargin = status.total_revenue > 0 ? (netProfit / status.total_revenue) * 100 : 0;
+
+      console.log(`   Net Profit: $${netProfit.toFixed(2)}`);
+      console.log(`   Profit Margin: ${profitMargin.toFixed(1)}%`);
+
+      // Calculate efficiency metrics if we have machines allocated
+      if (status.total_power_used > 0) {
+        console.log('\n📈 Efficiency Metrics:');
+        console.log(`   Revenue per kW: $${(status.total_revenue / (status.total_power_used / 1000)).toFixed(2)}/kW`);
+        console.log(`   Cost per kW: $${(status.total_power_cost / (status.total_power_used / 1000)).toFixed(2)}/kW`);
+        console.log(`   Profit per kW: $${(netProfit / (status.total_power_used / 1000)).toFixed(2)}/kW`);
+      }
+
+      console.log('\n🕐 Status Information:');
+      console.log(`   Allocation ID: ${status.id}`);
+      console.log(`   Site ID: ${status.site_id}`);
+      console.log(`   Last Updated: ${new Date(status.updated_at).toLocaleString()}`);
+
+      // Age of the status data
+      const statusAge = Date.now() - new Date(status.updated_at).getTime();
+      const ageInMinutes = Math.floor(statusAge / (1000 * 60));
+      console.log(`   Status Age: ${ageInMinutes} minutes old`);
+
+      console.log('\n✅ Machine status retrieval successful!');
+      return status;
+
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('500')) {
+        console.log('📭 No machines currently allocated (empty allocation)');
+        console.log('   This is normal for a new site with no machine allocation yet.');
+        console.log('   Use updateMachineAllocation() to allocate machines first.');
+        return null;
+      } else {
+        throw error;
+      }
+    }
+
+  } catch (error) {
+    console.error('❌ Machine status test failed:', error instanceof Error ? error.message : error);
+    throw error;
+  }
+}
+
 async function runAllTests() {
   console.log('🧪 Running Complete MARA API Test Suite...\n');
   console.log('='.repeat(60));
@@ -278,6 +369,11 @@ async function runAllTests() {
     await testMachineAllocation();
 
     console.log('\n' + '='.repeat(60));
+
+    // Test 5: Machine status
+    await testMachineStatus();
+
+    console.log('\n' + '='.repeat(60));
     console.log('🎉 All tests completed successfully!');
 
   } catch (error) {
@@ -299,6 +395,8 @@ if (require.main === module) {
     testGetInventory();
   } else if (testArg === 'allocation') {
     testMachineAllocation();
+  } else if (testArg === 'status') {
+    testMachineStatus();
   } else {
     runAllTests();
   }

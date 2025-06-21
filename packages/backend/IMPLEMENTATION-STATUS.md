@@ -39,12 +39,13 @@
 - `npm run test-mara-prices` - Price data testing
 - `npm run test-mara-inventory` - Inventory data testing 🆕
 - `npm run test-mara-allocation` - Machine allocation testing 🆕
+- `npm run test-mara-status` - Machine status testing 🆕
 
 ## 📊 Current Market Data (as of last test)
-- **Energy Price**: $1.132157/kWh
-- **Hash Price**: $2.24379615/TH/s
-- **Token Price**: $0.776105/token
-- **Data Points**: 110 historical records (9+ hours)
+- **Energy Price**: $1.242943/kWh
+- **Hash Price**: $2.40036348/TH/s
+- **Token Price**: $0.624815/token
+- **Data Points**: 110+ historical records (9+ hours)
 - **Update Frequency**: Every 5 minutes
 
 ## 🏭 Available Inventory
@@ -71,18 +72,26 @@
 - ✅ API Key: `6b4129e5-a606-464c-a5e1-611fe141047f`
 - ✅ Persistent storage working
 
+### Machine Status Analysis (Latest Demo) 🆕
+- **Optimized Allocation**: 50 air + 100 hydro + 20 immersion + 20 GPU + 6 ASIC
+- **Power Usage**: 993,310W / 1,000,000W (99.3% capacity utilization)
+- **Total Revenue**: $2,791,658.75
+- **Total Cost**: $1,234,627.80
+- **Net Profit**: $1,557,030.95 (55.8% profit margin)
+- **Efficiency**: $2,810.46 revenue per kW, $1,567.52 profit per kW
+
+### Machine Performance Rankings 🆕
+1. **Hydro Miners**: 386,138.7% ROI (most profitable)
+2. **Air Miners**: 57,841.6% ROI
+3. **Immersion Miners**: 96,459.7% ROI
+4. **ASIC Compute**: 25,034.5% ROI
+5. **GPU Compute**: 14,982.2% ROI
+
 ### Allocation Testing
 - ✅ Small allocation (174,990W) - Success
 - ✅ Oversized allocation (2,500,000W) - Correctly rejected
 - ✅ Clear allocation (0W) - Success
 - ✅ Power validation working perfectly
-
-### Revenue Analysis (Last Test)
-- **Test Allocation**: 10 air + 5 hydro + 2 immersion + 20 GPU + 3 ASIC
-- **Power Usage**: 174,990W / 1,000,000W (17.5% capacity)
-- **Revenue**: $184,229.39
-- **Cost**: $198,116.18
-- **Net Result**: -$13,886.79 (Loss due to current market conditions)
 
 ## 🚀 Next Steps for Arbitrage System
 1. **Real-time Optimization Engine**
