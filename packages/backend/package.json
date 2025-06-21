@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon src/index.ts",
-    "test": "test",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "test-mara": "ts-node src/test-mara-api.ts",
     "test-mara-prices": "ts-node src/test-mara-api.ts prices",
     "test-mara-site": "ts-node src/test-mara-api.ts site",
@@ -26,17 +27,36 @@
   },
   "homepage": "https://github.com/joshgarza/VertexArbiter#readme",
   "dependencies": {
-    "express": "^5.1.0",
-    "socket.io": "^4.7.5",
+    "axios": "^1.6.2",
     "cors": "^2.8.5",
-    "axios": "^1.6.2"
+    "express": "^5.1.0",
+    "socket.io": "^4.7.5"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/express": "^4.17.21",
     "@types/cors": "^2.8.17",
-    "typescript": "^5.3.0",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.10.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "ts-jest": "^29.4.0",
     "ts-node": "^10.9.1",
-    "nodemon": "^3.0.2"
+    "typescript": "^5.3.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/src"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.ts",
+      "**/?(*.)+(spec|test).ts"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.d.ts",
+      "!src/test-*.ts"
+    ]
   }
 }

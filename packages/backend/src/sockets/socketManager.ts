@@ -1,5 +1,7 @@
 import { Server } from 'socket.io';
 import { maraApiService } from '../api/maraApiService';
+import { ProfitabilityService, ProfitabilityAnalysis } from '../services/profitabilityService';
+import { MachineStatus } from '../types/maraApiTypes';
 
 export const initializeSocketHandlers = (io: Server) => {
   io.on('connection', (socket) => {
@@ -129,106 +131,15 @@ export const initializeSocketHandlers = (io: Server) => {
 };
 
 /**
- * Get machine status with comprehensive analysis
- * (Extracted from duplicate logic to reduce code duplication)
+ * Get machine status with comprehensive analysis using ProfitabilityService
  */
-async function getMachineStatusWithAnalysis() {
+async function getMachineStatusWithAnalysis(): Promise<MachineStatus & { analysis: ProfitabilityAnalysis }> {
   const status = await maraApiService.getMachineStatus();
   const prices = await maraApiService.getPrices();
   const siteConfig = maraApiService.getCurrentSiteConfig();
 
-  // Calculate analysis metrics
-  const netProfit = status.total_revenue - status.total_power_cost;
-  const profitMargin = status.total_revenue > 0 ? (netProfit / status.total_revenue) * 100 : 0;
-  const powerUtilization = siteConfig ? (status.total_power_used / siteConfig.power) * 100 : 0;
+  // Use ProfitabilityService for all analysis calculations
+  const analysis = ProfitabilityService.calculateAnalysis(status, prices, siteConfig);
 
-  // Calculate mining vs computing metrics for arbitrage decision
-  const miningRevenue = status.revenue.air_miners + status.revenue.hydro_miners + status.revenue.immersion_miners;
-  const miningPower = status.power.air_miners + status.power.hydro_miners + status.power.immersion_miners;
-  const miningCost = (miningPower / 1000) * prices.energy_price;
-  const miningProfit = miningRevenue - miningCost;
-
-  const computingRevenue = status.revenue.gpu_compute + status.revenue.asic_compute;
-  const computingPower = status.power.gpu_compute + status.power.asic_compute;
-  const computingCost = (computingPower / 1000) * prices.energy_price;
-  const computingProfit = computingRevenue - computingCost;
-
-  // Determine arbitrage choice
-  const arbitrageChoice = determineArbitrageChoice(miningProfit, computingProfit, miningPower, computingPower);
-
-  const machineStatusWithAnalysis = {
-    ...status,
-    analysis: {
-      netProfit,
-      profitMargin,
-      powerUtilization,
-      revenuePerKw: status.total_power_used > 0 ? status.total_revenue / (status.total_power_used / 1000) : 0,
-      costPerKw: status.total_power_used > 0 ? status.total_power_cost / (status.total_power_used / 1000) : 0,
-      profitPerKw: status.total_power_used > 0 ? netProfit / (status.total_power_used / 1000) : 0,
-      currentPrices: prices,
-      siteInfo: siteConfig,
-      arbitrage: {
-        currentChoice: arbitrageChoice.choice,
-        reasoning: arbitrageChoice.reasoning,
-        confidence: arbitrageChoice.confidence,
-        mining: {
-          revenue: miningRevenue,
-          power: miningPower,
-          cost: miningCost,
-          profit: miningProfit,
-          profitPerKw: miningPower > 0 ? miningProfit / (miningPower / 1000) : 0,
-          efficiency: miningPower > 0 ? miningRevenue / (miningPower / 1000) : 0
-        },
-        computing: {
-          revenue: computingRevenue,
-          power: computingPower,
-          cost: computingCost,
-          profit: computingProfit,
-          profitPerKw: computingPower > 0 ? computingProfit / (computingPower / 1000) : 0,
-          efficiency: computingPower > 0 ? computingRevenue / (computingPower / 1000) : 0
-        }
-      }
-    }
-  };
-
-  return machineStatusWithAnalysis;
-}
-
-/**
- * Determine the optimal arbitrage choice between mining and computing
- * (Duplicated from StartupService for socket handler use)
- */
-function determineArbitrageChoice(miningProfit: number, computingProfit: number, miningPower: number, computingPower: number): {
-  choice: 'mining' | 'computing' | 'mixed';
-  reasoning: string;
-  confidence: number;
-} {
-  const miningProfitPerKw = miningPower > 0 ? miningProfit / (miningPower / 1000) : 0;
-  const computingProfitPerKw = computingPower > 0 ? computingProfit / (computingPower / 1000) : 0;
-
-  // Calculate profit difference as percentage
-  const totalProfit = miningProfit + computingProfit;
-  const profitDifference = Math.abs(miningProfitPerKw - computingProfitPerKw);
-  const profitDifferencePercent = totalProfit > 0 ? (profitDifference / (totalProfit / 2)) * 100 : 0;
-
-  // Determine choice based on profit per kW
-  if (miningProfitPerKw > computingProfitPerKw * 1.1) {
-    return {
-      choice: 'mining',
-      reasoning: `Mining is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${miningProfitPerKw.toFixed(2)}/kW vs $${computingProfitPerKw.toFixed(2)}/kW)`,
-      confidence: Math.min(95, 50 + profitDifferencePercent)
-    };
-  } else if (computingProfitPerKw > miningProfitPerKw * 1.1) {
-    return {
-      choice: 'computing',
-      reasoning: `Computing is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${computingProfitPerKw.toFixed(2)}/kW vs $${miningProfitPerKw.toFixed(2)}/kW)`,
-      confidence: Math.min(95, 50 + profitDifferencePercent)
-    };
-  } else {
-    return {
-      choice: 'mixed',
-      reasoning: `Profits are similar (${profitDifferencePercent.toFixed(1)}% difference) - maintaining mixed allocation for diversification`,
-      confidence: Math.max(60, 100 - profitDifferencePercent)
-    };
-  }
+  return { ...status, analysis };
 }
