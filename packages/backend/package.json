@@ -6,9 +6,13 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon",
+    "dev": "nodemon src/index.ts",
     "test": "test",
-    "test-mara": "ts-node src/test-mara-api.ts"
+    "test-mara": "ts-node src/test-mara-api.ts",
+    "test-mara-prices": "ts-node src/test-mara-api.ts prices",
+    "test-mara-site": "ts-node src/test-mara-api.ts site",
+    "test-mara-inventory": "ts-node src/test-mara-api.ts inventory",
+    "test-mara-allocation": "ts-node src/test-mara-api.ts allocation"
   },
   "repository": {
     "type": "git",

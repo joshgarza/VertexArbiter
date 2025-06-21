@@ -18,12 +18,14 @@ export interface CreateSiteResponse {
   power: number;
 }
 
-export interface PriceData {
+export interface PriceDataPoint {
   energy_price: number;
   hash_price: number;
   timestamp: string;
   token_price: number;
 }
+
+export interface PriceData extends Array<PriceDataPoint> {}
 
 export interface InventoryResponse {
   inference: {
