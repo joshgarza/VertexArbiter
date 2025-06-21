@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon",
-    "test": "test"
+    "test": "test",
+    "test-mara": "ts-node src/test-mara-api.ts"
   },
   "repository": {
     "type": "git",
@@ -22,7 +23,8 @@
   "dependencies": {
     "express": "^5.1.0",
     "socket.io": "^4.7.5",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "axios": "^1.6.2"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
