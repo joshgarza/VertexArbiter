@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { initializeSocketHandlers } from './sockets/socketManager';
+import { StartupService } from './services/startupService';
 
 const app = express();
 const server = createServer(app);
@@ -28,10 +29,19 @@ app.get('/health', (req, res) => {
 // Initialize Socket.IO handlers
 initializeSocketHandlers(io);
 
+// Initialize startup service
+const startupService = new StartupService(io);
+
 // Start server
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`WebSocket server ready for connections`);
+
+  // Initialize machine allocation and start broadcasting
+  await startupService.initialize();
+
+  // Start periodic updates every 5 minutes
+  startupService.startPeriodicUpdates(5);
 });
 
 // Graceful shutdown
