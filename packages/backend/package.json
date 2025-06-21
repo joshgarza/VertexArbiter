@@ -1,0 +1,22 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "VertexArbiter API",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshgarza/VertexArbiter.git"
+  },
+  "author": "Josh Garza",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/joshgarza/VertexArbiter/issues"
+  },
+  "homepage": "https://github.com/joshgarza/VertexArbiter#readme",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
