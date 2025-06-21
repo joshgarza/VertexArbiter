@@ -36,29 +36,36 @@ export class DecisionEngine {
     const miningProfitPerKw = miningPower > 0 ? miningProfit / (miningPower / 1000) : 0;
     const computingProfitPerKw = computingPower > 0 ? computingProfit / (computingPower / 1000) : 0;
 
-    // Calculate profit difference as percentage
-    const totalProfit = miningProfit + computingProfit;
-    const profitDifference = Math.abs(miningProfitPerKw - computingProfitPerKw);
-    const profitDifferencePercent = totalProfit > 0 ? (profitDifference / (totalProfit / 2)) * 100 : 0;
+    // Calculate percentage difference properly for profit per kW comparison
+    let profitDifferencePercent = 0;
+    if (miningProfitPerKw > 0 && computingProfitPerKw > 0) {
+      // Calculate percentage difference relative to the smaller value
+      const smallerValue = Math.min(Math.abs(miningProfitPerKw), Math.abs(computingProfitPerKw));
+      const largerValue = Math.max(Math.abs(miningProfitPerKw), Math.abs(computingProfitPerKw));
+      profitDifferencePercent = smallerValue > 0 ? ((largerValue - smallerValue) / smallerValue) * 100 : 0;
+    } else if (miningProfitPerKw > 0 || computingProfitPerKw > 0) {
+      // One is zero, so it's 100% difference
+      profitDifferencePercent = 100;
+    }
 
     // Determine choice based on profit per kW with 10% threshold
     if (miningProfitPerKw > computingProfitPerKw * 1.1) {
       return {
         choice: 'mining',
         reasoning: `Mining is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${miningProfitPerKw.toFixed(2)}/kW vs $${computingProfitPerKw.toFixed(2)}/kW)`,
-        confidence: Math.min(95, 50 + profitDifferencePercent)
+        confidence: Math.min(95, 50 + Math.min(profitDifferencePercent / 10, 45))
       };
     } else if (computingProfitPerKw > miningProfitPerKw * 1.1) {
       return {
         choice: 'computing',
         reasoning: `Computing is ${profitDifferencePercent.toFixed(1)}% more profitable per kW ($${computingProfitPerKw.toFixed(2)}/kW vs $${miningProfitPerKw.toFixed(2)}/kW)`,
-        confidence: Math.min(95, 50 + profitDifferencePercent)
+        confidence: Math.min(95, 50 + Math.min(profitDifferencePercent / 10, 45))
       };
     } else {
       return {
         choice: 'mixed',
         reasoning: `Profits are similar (${profitDifferencePercent.toFixed(1)}% difference) - maintaining mixed allocation for diversification`,
-        confidence: Math.max(60, 100 - profitDifferencePercent)
+        confidence: Math.max(60, 100 - Math.min(profitDifferencePercent / 2, 40))
       };
     }
   }
